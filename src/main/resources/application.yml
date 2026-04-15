@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: kafka-service
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: kafka-service-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/kafka_service
+    username: kafka_service
+    password: kafka_service
+    driver-class-name: org.postgresql.Driver
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  kafka:
+    topic: voiceres

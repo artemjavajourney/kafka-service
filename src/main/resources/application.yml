@@ -36,3 +36,5 @@ management:
 app:
   kafka:
     topic: voiceres
+  apply:
+    fixed-delay-ms: 2000

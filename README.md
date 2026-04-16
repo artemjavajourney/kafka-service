@@ -1,47 +1,44 @@
 # kafka-service-target
 
-Minimal working target version of the Kafka consumer service after the agreed architectural update.
+Kafka consumer service with durable intake and scheduled batch apply.
 
-## What this version implements
+## Current architecture
 
-This project implements **slice 1 only**:
+The pipeline is split into two fully independent stages:
 
-Kafka -> minimal intake validation -> durable save to `staging_inbox` -> create `event_processing_log` row with `STAGED` -> listener returns successfully
+1. **Intake** (Kafka listener)
+   - reads Kafka messages
+   - performs only minimal metadata extraction
+   - stores raw payload to `staging_inbox`
+   - creates `event_processing_log` row with `STAGED`
 
-What is intentionally **not implemented yet**:
-- stage -> final apply orchestrator
-- per-entity final handlers
-- final business table writes
-- final insert/update/skip/deferred decision logic
+2. **Apply** (scheduler/batch)
+   - periodically claims next batch of `STAGED` / `DEFERRED` rows
+   - marks them as `PROCESSING`
+   - applies business logic in bulk to final tables
+   - updates status to `APPLIED`, `SKIPPED`, `DEFERRED`, or `FAILED`
 
-## Why this is the correct current slice
+## Why this architecture
 
-The service must first establish a durable intake boundary before business apply logic is added:
-- consume raw Kafka message
-- stage it safely in DB
-- create intake audit row
-- allow offset progression only after persistence succeeds
+It avoids an expensive DB apply attempt on every incoming Kafka message and scales better for high-throughput topics.
 
 ## Main packages
 
-- `config` - configuration properties and application entry point
-- `consumer` - thin Kafka listener
-- `intake` - intake flow, metadata extraction, statuses, staging model
-- `audit` - audit status and audit row model
-- `repository` - explicit JDBC repositories for staging and audit writes
+- `config` - application boot and scheduling enablement
+- `consumer` - Kafka listener (intake only)
+- `intake` - intake flow and metadata extraction
+- `apply` - batch scheduler and apply orchestration
+- `audit` - processing statuses and audit model
+- `repository` - staging/audit JDBC access
+- `finaltable` - bulk persistence into final tables
 
 ## Runtime notes
 
-The project is intended to open and compile in an IDE. To run it, you need:
-- a reachable Kafka broker
-- a PostgreSQL database
-- correct credentials in `application.yml`
+To run the service, you need:
+- Kafka broker
+- PostgreSQL
+- correct `application.yml`
 
-## Next slice
+## Key tunables
 
-After this slice, add:
-1. `ApplyOrchestrator`
-2. staged row selection by `loading_id`
-3. per-entity apply handlers
-4. final table persistence
-5. audit status update to `APPLIED / SKIPPED / FAILED / DEFERRED`
+- `app.apply.fixed-delay-ms` - scheduler delay between apply ticks

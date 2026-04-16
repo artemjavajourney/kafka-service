@@ -1,10 +1,19 @@
 package com.example.kafkaservice.repository;
 
+import com.example.kafkaservice.apply.ApplyCandidate;
+import com.example.kafkaservice.apply.ApplyStatusUpdate;
 import com.example.kafkaservice.audit.EventProcessingLogRecord;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.OffsetDateTime;
+import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
@@ -56,6 +65,81 @@ public class EventProcessingLogRepository {
                 on conflict (staging_id) do nothing
                 """,
                 params
+        );
+    }
+
+    public List<ApplyCandidate> claimNextBatch(int batchSize, OffsetDateTime now) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("batchSize", batchSize)
+                .addValue("now", now)
+                .addValue("processingStatus", "PROCESSING");
+
+        return jdbcTemplate.query(
+                """
+                with picked as (
+                    select epl.staging_id
+                    from event_processing_log epl
+                    where epl.status in ('STAGED', 'DEFERRED')
+                    order by epl.created_at, epl.staging_id
+                    limit :batchSize
+                    for update skip locked
+                ), marked as (
+                    update event_processing_log epl
+                    set status = :processingStatus,
+                        updated_at = :now,
+                        error_message = null
+                    from picked
+                    where epl.staging_id = picked.staging_id
+                    returning epl.staging_id,
+                              epl.loading_id,
+                              epl.entity_type
+                )
+                select marked.staging_id,
+                       marked.loading_id,
+                       marked.entity_type,
+                       si.raw_message
+                from marked
+                join staging_inbox si on si.id = marked.staging_id
+                order by marked.staging_id
+                """,
+                params,
+                (rs, rowNum) -> new ApplyCandidate(
+                        rs.getLong("staging_id"),
+                        rs.getString("loading_id"),
+                        rs.getString("entity_type"),
+                        rs.getString("raw_message")
+                )
+        );
+    }
+
+    public void batchUpdateStatuses(List<ApplyStatusUpdate> updates, OffsetDateTime now) {
+        if (updates.isEmpty()) {
+            return;
+        }
+
+        jdbcTemplate.getJdbcTemplate().batchUpdate(
+                """
+                update event_processing_log
+                set status = ?,
+                    error_message = ?,
+                    updated_at = ?
+                where staging_id = ?
+                """,
+                new BatchPreparedStatementSetter() {
+                    @Override
+                    public void setValues(PreparedStatement ps, int i) throws SQLException {
+                        ApplyStatusUpdate update = updates.get(i);
+                        ps.setString(1, update.status().name());
+                        ps.setString(2, update.errorMessage());
+                        ps.setTimestamp(3, Timestamp.from(now.toInstant()));
+                        ps.setLong(4, update.stagingId());
+                    }
+
+                    @Override
+                    public int getBatchSize() {
+                        return updates.size();
+                    }
+                }
         );
     }
 }

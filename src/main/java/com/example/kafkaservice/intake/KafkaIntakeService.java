@@ -22,7 +22,7 @@ public class KafkaIntakeService {
     private final EventProcessingLogRepository eventProcessingLogRepository;
 
     @Transactional
-    public void intake(ConsumerRecord<String, String> record) {
+    public IntakeResult intake(ConsumerRecord<String, String> record) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
 
         ExtractedMetadata metadata = messageMetadataExtractor.extract(record.value());
@@ -59,6 +59,13 @@ public class KafkaIntakeService {
                 record.partition(),
                 record.offset(),
                 record.key(),
+                metadata.loadingId(),
+                metadata.entityType(),
+                metadata.parseStatus()
+        );
+
+        return new IntakeResult(
+                stagingId,
                 metadata.loadingId(),
                 metadata.entityType(),
                 metadata.parseStatus()

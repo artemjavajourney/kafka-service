@@ -1,0 +1,72 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-final-entity-1
+      author: openai
+      changes:
+        - createTable:
+            tableName: final_entity_1
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_final_entity_1
+                    nullable: false
+              - column:
+                  name: business_id
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payload
+                  type: JSONB
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: final_entity_1
+            columnNames: business_id
+            constraintName: uq_final_entity_1_business_id
+
+  - changeSet:
+      id: 004-create-final-entity-2
+      author: openai
+      changes:
+        - createTable:
+            tableName: final_entity_2
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_final_entity_2
+                    nullable: false
+              - column:
+                  name: business_id
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: entity1_business_id
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payload
+                  type: JSONB
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: final_entity_2
+            columnNames: business_id
+            constraintName: uq_final_entity_2_business_id
+        - addForeignKeyConstraint:
+            baseTableName: final_entity_2
+            baseColumnNames: entity1_business_id
+            referencedTableName: final_entity_1
+            referencedColumnNames: business_id
+            constraintName: fk_final_entity_2_entity1_business
+            onDelete: RESTRICT

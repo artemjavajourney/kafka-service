@@ -1,26 +1,17 @@
 # kafka-service-target
 
-Minimal working target version of the Kafka consumer service after the agreed architectural update.
+Kafka consumer service with durable intake, staging/audit, and dependency-aware apply into final tables.
 
 ## What this version implements
 
-This project implements **slice 1 only**:
+This project now implements end-to-end pipeline for two example entities (`ENTITY_1`, `ENTITY_2`):
 
-Kafka -> minimal intake validation -> durable save to `staging_inbox` -> create `event_processing_log` row with `STAGED` -> listener returns successfully
+Kafka -> minimal intake validation -> durable save to `staging_inbox` -> create `event_processing_log` row with `STAGED` -> apply by `loading_id` in dependency order -> write final tables -> update status (`APPLIED` / `DEFERRED` / `FAILED` / `SKIPPED`)
 
-What is intentionally **not implemented yet**:
-- stage -> final apply orchestrator
-- per-entity final handlers
-- final business table writes
-- final insert/update/skip/deferred decision logic
+## Why this design is used
 
-## Why this is the correct current slice
-
-The service must first establish a durable intake boundary before business apply logic is added:
-- consume raw Kafka message
-- stage it safely in DB
-- create intake audit row
-- allow offset progression only after persistence succeeds
+All business entities arrive in one topic, and message order can be unsafe for relational dependencies.
+To avoid foreign-key violations and data loss, intake is always durable first, and final apply is executed separately by dependency order.
 
 ## Main packages
 
@@ -28,7 +19,9 @@ The service must first establish a durable intake boundary before business apply
 - `consumer` - thin Kafka listener
 - `intake` - intake flow, metadata extraction, statuses, staging model
 - `audit` - audit status and audit row model
-- `repository` - explicit JDBC repositories for staging and audit writes
+- `repository` - explicit JDBC repositories for staging, audit, and apply reads/updates
+- `apply` - apply orchestrator and business payload extraction
+- `finaltable` - repositories writing to final business tables
 
 ## Runtime notes
 
@@ -37,11 +30,11 @@ The project is intended to open and compile in an IDE. To run it, you need:
 - a PostgreSQL database
 - correct credentials in `application.yml`
 
-## Next slice
+## Entity contract used by apply phase
 
-After this slice, add:
-1. `ApplyOrchestrator`
-2. staged row selection by `loading_id`
-3. per-entity apply handlers
-4. final table persistence
-5. audit status update to `APPLIED / SKIPPED / FAILED / DEFERRED`
+Current apply implementation expects JSON where `result_json.body` contains:
+- `entity_type` (or `entityType`) with values `ENTITY_1` / `ENTITY_2`
+- business identifier in one of: `id`, `entity_id`, `entityId`, `business_id`, `businessId`
+- for `ENTITY_2`, parent id in one of: `entity1_id`, `parent_id`, `parentId`, `parent_entity_id`, `parentEntityId`
+
+If parent is missing/not yet in final table, message is marked `DEFERRED` and retried when another message with the same `loading_id` arrives.

@@ -1,6 +1,6 @@
 package com.example.kafkaservice.finaltable;
 
-import com.example.kafkaservice.apply.FinalUpsertItem;
+import com.example.kafkaservice.apply.EntityOneData;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -21,23 +22,50 @@ public class EntityOneRepository {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    public void batchUpsert(List<FinalUpsertItem> records) {
+    public void batchUpsert(List<EntityOneData> records) {
         if (records.isEmpty()) {
             return;
         }
 
         jdbcTemplate.getJdbcTemplate().batchUpdate(
                 """
-                insert into final_entity_1 (business_id, payload)
-                values (?, cast(? as jsonb))
-                on conflict (business_id) do update set payload = excluded.payload
+                insert into final_entity_1 (
+                    trend_uuid,
+                    trend_name,
+                    emotion,
+                    is_visible,
+                    product_id,
+                    group_id,
+                    is_archived,
+                    employee_id_create,
+                    created_at,
+                    prev_product_id
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict (trend_uuid) do update set
+                    trend_name = excluded.trend_name,
+                    emotion = excluded.emotion,
+                    is_visible = excluded.is_visible,
+                    product_id = excluded.product_id,
+                    group_id = excluded.group_id,
+                    is_archived = excluded.is_archived,
+                    employee_id_create = excluded.employee_id_create,
+                    created_at = excluded.created_at,
+                    prev_product_id = excluded.prev_product_id
                 """,
                 new BatchPreparedStatementSetter() {
                     @Override
                     public void setValues(PreparedStatement ps, int i) throws SQLException {
-                        FinalUpsertItem record = records.get(i);
-                        ps.setString(1, record.businessId());
-                        ps.setString(2, record.payload());
+                        EntityOneData record = records.get(i);
+                        ps.setString(1, record.trendUuid());
+                        ps.setString(2, record.trendName());
+                        ps.setObject(3, record.emotion());
+                        ps.setObject(4, record.isVisible());
+                        ps.setObject(5, record.productId());
+                        ps.setString(6, record.groupId());
+                        ps.setObject(7, record.isArchived());
+                        ps.setString(8, record.employeeIdCreate());
+                        ps.setTimestamp(9, record.createdAt() == null ? null : Timestamp.from(record.createdAt().toInstant()));
+                        ps.setObject(10, record.prevProductId());
                     }
 
                     @Override
@@ -48,42 +76,63 @@ public class EntityOneRepository {
         );
     }
 
-    public Set<String> findExistingBusinessIds(Set<String> businessIds) {
-        if (businessIds.isEmpty()) {
+    public Set<String> findExistingTrendUuids(Set<String> trendUuids) {
+        if (trendUuids.isEmpty()) {
             return Collections.emptySet();
         }
 
         return Set.copyOf(jdbcTemplate.queryForList(
                 """
-                select business_id
+                select trend_uuid
                 from final_entity_1
-                where business_id in (:ids)
+                where trend_uuid in (:ids)
                 """,
-                new MapSqlParameterSource("ids", businessIds),
+                new MapSqlParameterSource("ids", trendUuids),
                 String.class
         ));
     }
 
-    public Map<String, String> findPayloadByBusinessIds(Set<String> businessIds) {
-        if (businessIds.isEmpty()) {
+    public Map<String, EntityOneComparable> findComparableByTrendUuids(Set<String> trendUuids) {
+        if (trendUuids.isEmpty()) {
             return Collections.emptyMap();
         }
 
         return jdbcTemplate.query(
                 """
-                select business_id,
-                       payload::text as payload
+                select trend_uuid,
+                       trend_name,
+                       emotion,
+                       product_id
                 from final_entity_1
-                where business_id in (:ids)
+                where trend_uuid in (:ids)
                 """,
-                new MapSqlParameterSource("ids", businessIds),
+                new MapSqlParameterSource("ids", trendUuids),
                 rs -> {
-                    Map<String, String> result = new HashMap<>();
+                    Map<String, EntityOneComparable> result = new HashMap<>();
                     while (rs.next()) {
-                        result.put(rs.getString("business_id"), rs.getString("payload"));
+                        result.put(
+                                rs.getString("trend_uuid"),
+                                new EntityOneComparable(
+                                        rs.getString("trend_name"),
+                                        (Integer) rs.getObject("emotion"),
+                                        (Integer) rs.getObject("product_id")
+                                )
+                        );
                     }
                     return result;
                 }
         );
+    }
+
+    public record EntityOneComparable(
+            String trendName,
+            Integer emotion,
+            Integer productId
+    ) {
+        public boolean isChangedComparedTo(EntityOneData data) {
+            return !java.util.Objects.equals(trendName, data.trendName())
+                    || !java.util.Objects.equals(emotion, data.emotion())
+                    || !java.util.Objects.equals(productId, data.productId());
+        }
     }
 }

@@ -27,21 +27,13 @@ public class BusinessPayloadExtractor {
                 entityType = fallbackEntityType;
             }
 
-            String businessId = firstText(body, "id", "entity_id", "entityId", "business_id", "businessId");
-            String parentBusinessId = firstText(body, "entity1_id", "parent_id", "parentId", "parent_entity_id", "parentEntityId");
-
-            return new BusinessPayload(
-                    entityType,
-                    businessId,
-                    parentBusinessId,
-                    body.toString()
-            );
+            return new BusinessPayload(entityType, body);
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to parse raw message for apply: " + e.getMessage(), e);
         }
     }
 
-    private String firstText(JsonNode node, String... fieldNames) {
+    public String firstText(JsonNode node, String... fieldNames) {
         if (node == null || node.isMissingNode() || node.isNull()) {
             return null;
         }
@@ -56,6 +48,34 @@ public class BusinessPayloadExtractor {
             }
         }
 
+        return null;
+    }
+
+    public Integer firstInt(JsonNode node, String... fieldNames) {
+        String text = firstText(node, fieldNames);
+        if (text == null) {
+            return null;
+        }
+
+        try {
+            return Integer.valueOf(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public Boolean firstBoolean(JsonNode node, String... fieldNames) {
+        String text = firstText(node, fieldNames);
+        if (text == null) {
+            return null;
+        }
+
+        if ("true".equalsIgnoreCase(text) || "1".equals(text)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
+            return false;
+        }
         return null;
     }
 }

@@ -2,6 +2,7 @@ package com.example.kafkaservice.apply;
 
 import com.example.kafkaservice.audit.ProcessingLogStatus;
 import com.example.kafkaservice.finaltable.EntityOneRepository;
+import com.example.kafkaservice.finaltable.EntityThreeRepository;
 import com.example.kafkaservice.finaltable.EntityTwoRepository;
 import com.example.kafkaservice.repository.EventProcessingLogRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,8 +28,10 @@ public class ApplyOrchestrator {
 
     private final EventProcessingLogRepository eventProcessingLogRepository;
     private final BusinessPayloadExtractor businessPayloadExtractor;
+    private final BusinessEntityMapper entityMapper;
     private final EntityOneRepository entityOneRepository;
     private final EntityTwoRepository entityTwoRepository;
+    private final EntityThreeRepository entityThreeRepository;
 
     @Transactional
     public int applyNextBatch() {
@@ -39,8 +42,9 @@ public class ApplyOrchestrator {
         }
 
         List<ApplyStatusUpdate> statusUpdates = new ArrayList<>();
-        List<FinalUpsertItem> entityOneRecords = new ArrayList<>();
-        List<FinalUpsertItem> entityTwoRecords = new ArrayList<>();
+        List<EntityOneItem> entityOneItems = new ArrayList<>();
+        List<EntityTwoItem> entityTwoItems = new ArrayList<>();
+        List<EntityThreeItem> entityThreeItems = new ArrayList<>();
 
         for (ApplyCandidate candidate : candidates) {
             try {
@@ -48,21 +52,24 @@ public class ApplyOrchestrator {
                 String normalizedType = normalizeType(payload.entityType());
 
                 if ("ENTITY_1".equals(normalizedType)) {
-                    collectEntityOne(candidate, payload, statusUpdates, entityOneRecords);
+                    collectEntityOne(candidate, payload, statusUpdates, entityOneItems);
                 } else if ("ENTITY_2".equals(normalizedType)) {
-                    collectEntityTwo(candidate, payload, statusUpdates, entityTwoRecords);
+                    collectEntityTwo(candidate, payload, statusUpdates, entityTwoItems);
+                } else if ("ENTITY_3".equals(normalizedType)) {
+                    collectEntityThree(candidate, payload, statusUpdates, entityThreeItems);
                 } else {
-                    statusUpdates.add(new ApplyStatusUpdate(candidate.stagingId(), ProcessingLogStatus.SKIPPED,
-                            "Unknown entity type: " + payload.entityType()));
+                    statusUpdates.add(ApplyStatusUpdate.skipped(candidate.stagingId(), "Unknown entity type: " + payload.entityType()));
                 }
             } catch (Exception e) {
-                statusUpdates.add(new ApplyStatusUpdate(candidate.stagingId(), ProcessingLogStatus.FAILED,
+                statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(),
                         "Failed to parse raw message for apply: " + e.getMessage()));
             }
         }
 
-        applyEntityOneBatch(entityOneRecords, statusUpdates);
-        applyEntityTwoBatch(entityTwoRecords, statusUpdates);
+        applyEntityOneBatch(entityOneItems, statusUpdates);
+        applyEntityTwoBatch(entityTwoItems, statusUpdates);
+        applyEntityThreeBatch(entityThreeItems, statusUpdates);
+
         eventProcessingLogRepository.batchUpdateStatuses(statusUpdates, now);
 
         long applied = statusUpdates.stream().filter(s -> s.status() == ProcessingLogStatus.APPLIED).count();
@@ -77,115 +84,146 @@ public class ApplyOrchestrator {
         return candidates.size();
     }
 
-    private void applyEntityOneBatch(List<FinalUpsertItem> records, List<ApplyStatusUpdate> statusUpdates) {
-        if (records.isEmpty()) {
+    private void applyEntityOneBatch(List<EntityOneItem> items, List<ApplyStatusUpdate> statusUpdates) {
+        if (items.isEmpty()) {
             return;
         }
 
-        DedupResult dedup = deduplicateByBusinessId(records);
-        dedup.obsoleteStagingIds().forEach(id -> statusUpdates.add(new ApplyStatusUpdate(id, ProcessingLogStatus.SKIPPED, "Obsolete version in batch")));
+        Map<String, EntityOneItem> latestByKey = deduplicate(items, EntityOneItem::trendUuid, statusUpdates);
+        Map<String, EntityOneRepository.EntityOneComparable> existing = entityOneRepository.findComparableByTrendUuids(latestByKey.keySet());
 
-        Map<String, String> existingPayloads = entityOneRepository.findPayloadByBusinessIds(dedup.latestByBusinessId().keySet());
-
-        List<FinalUpsertItem> toUpsert = new ArrayList<>();
-        for (FinalUpsertItem record : dedup.latestByBusinessId().values()) {
-            String existingPayload = existingPayloads.get(record.businessId());
-            if (existingPayload != null && existingPayload.equals(record.payload())) {
-                statusUpdates.add(new ApplyStatusUpdate(record.stagingId(), ProcessingLogStatus.SKIPPED, "No changes"));
+        List<EntityOneData> toUpsert = new ArrayList<>();
+        List<ApplyStatusUpdate> applyResults = new ArrayList<>();
+        for (EntityOneItem item : latestByKey.values()) {
+            EntityOneRepository.EntityOneComparable comparable = existing.get(item.trendUuid());
+            if (comparable == null) {
+                toUpsert.add(item.data());
+                applyResults.add(ApplyStatusUpdate.inserted(item.stagingId()));
+            } else if (comparable.isChangedComparedTo(item.data())) {
+                toUpsert.add(item.data());
+                applyResults.add(ApplyStatusUpdate.updated(item.stagingId()));
             } else {
-                toUpsert.add(record);
+                statusUpdates.add(ApplyStatusUpdate.skipped(item.stagingId(), "No changes"));
             }
         }
 
         entityOneRepository.batchUpsert(toUpsert);
-        toUpsert.forEach(record -> statusUpdates.add(new ApplyStatusUpdate(record.stagingId(), ProcessingLogStatus.APPLIED, null)));
+        statusUpdates.addAll(applyResults);
     }
 
-    private void applyEntityTwoBatch(List<FinalUpsertItem> records, List<ApplyStatusUpdate> statusUpdates) {
-        if (records.isEmpty()) {
+    private void applyEntityTwoBatch(List<EntityTwoItem> items, List<ApplyStatusUpdate> statusUpdates) {
+        if (items.isEmpty()) {
             return;
         }
 
-        DedupResult dedup = deduplicateByBusinessId(records);
-        dedup.obsoleteStagingIds().forEach(id -> statusUpdates.add(new ApplyStatusUpdate(id, ProcessingLogStatus.SKIPPED, "Obsolete version in batch")));
+        Map<EntityTwoKey, EntityTwoItem> latestByKey = deduplicate(items, EntityTwoItem::key, statusUpdates);
 
-        Set<String> parentIds = dedup.latestByBusinessId().values().stream()
-                .map(FinalUpsertItem::parentBusinessId)
-                .collect(Collectors.toSet());
+        Set<String> trendUuids = latestByKey.values().stream().map(i -> i.data().trendUuid()).collect(Collectors.toSet());
+        Set<String> existingParents = entityOneRepository.findExistingTrendUuids(trendUuids);
+        Map<EntityTwoKey, EntityTwoRepository.EntityTwoComparable> existing = entityTwoRepository.findComparableByKeys(latestByKey.keySet());
 
-        Set<String> existingParents = entityOneRepository.findExistingBusinessIds(parentIds);
-        Map<String, String> existingPayloads = entityTwoRepository.findPayloadByBusinessIds(dedup.latestByBusinessId().keySet());
-
-        List<FinalUpsertItem> toUpsert = new ArrayList<>();
-        for (FinalUpsertItem record : dedup.latestByBusinessId().values()) {
-            if (!existingParents.contains(record.parentBusinessId())) {
-                statusUpdates.add(new ApplyStatusUpdate(record.stagingId(), ProcessingLogStatus.DEFERRED,
-                        "Parent ENTITY_1 not found yet for id=" + record.parentBusinessId()));
+        List<EntityTwoData> toUpsert = new ArrayList<>();
+        List<ApplyStatusUpdate> applyResults = new ArrayList<>();
+        for (EntityTwoItem item : latestByKey.values()) {
+            if (!existingParents.contains(item.data().trendUuid())) {
+                statusUpdates.add(ApplyStatusUpdate.deferred(item.stagingId(),
+                        "Parent ENTITY_1 not found yet for trend_uuid=" + item.data().trendUuid()));
                 continue;
             }
 
-            String existingPayload = existingPayloads.get(record.businessId());
-            if (existingPayload != null && existingPayload.equals(record.payload())) {
-                statusUpdates.add(new ApplyStatusUpdate(record.stagingId(), ProcessingLogStatus.SKIPPED, "No changes"));
-                continue;
+            EntityTwoRepository.EntityTwoComparable comparable = existing.get(item.key());
+            if (comparable == null) {
+                toUpsert.add(item.data());
+                applyResults.add(ApplyStatusUpdate.inserted(item.stagingId()));
+            } else if (comparable.isChangedComparedTo(item.data())) {
+                toUpsert.add(item.data());
+                applyResults.add(ApplyStatusUpdate.updated(item.stagingId()));
+            } else {
+                statusUpdates.add(ApplyStatusUpdate.skipped(item.stagingId(), "No changes"));
             }
-
-            toUpsert.add(record);
         }
 
         entityTwoRepository.batchUpsert(toUpsert);
-        toUpsert.forEach(record -> statusUpdates.add(new ApplyStatusUpdate(record.stagingId(), ProcessingLogStatus.APPLIED, null)));
+        statusUpdates.addAll(applyResults);
     }
 
-    private DedupResult deduplicateByBusinessId(List<FinalUpsertItem> records) {
-        Map<String, FinalUpsertItem> latest = new LinkedHashMap<>();
-        for (FinalUpsertItem record : records) {
-            latest.put(record.businessId(), record);
-        }
-
-        Set<Long> latestStagingIds = latest.values().stream().map(FinalUpsertItem::stagingId).collect(Collectors.toSet());
-        List<Long> obsolete = records.stream()
-                .map(FinalUpsertItem::stagingId)
-                .filter(id -> !latestStagingIds.contains(id))
-                .toList();
-
-        return new DedupResult(latest, obsolete);
-    }
-
-    private void collectEntityOne(
-            ApplyCandidate candidate,
-            BusinessPayload payload,
-            List<ApplyStatusUpdate> statusUpdates,
-            List<FinalUpsertItem> records
-    ) {
-        if (payload.businessId() == null || payload.businessId().isBlank()) {
-            statusUpdates.add(new ApplyStatusUpdate(candidate.stagingId(), ProcessingLogStatus.FAILED,
-                    "ENTITY_1 message does not contain business id"));
+    private void applyEntityThreeBatch(List<EntityThreeItem> items, List<ApplyStatusUpdate> statusUpdates) {
+        if (items.isEmpty()) {
             return;
         }
 
-        records.add(new FinalUpsertItem(candidate.stagingId(), payload.businessId(), null, payload.rawBody()));
+        Map<String, EntityThreeItem> latestByKey = deduplicate(items, EntityThreeItem::summaryUuid, statusUpdates);
+        Map<String, EntityThreeRepository.EntityThreeComparable> existing =
+                entityThreeRepository.findComparableBySummaryUuids(latestByKey.keySet());
+
+        List<EntityThreeData> toUpsert = new ArrayList<>();
+        List<ApplyStatusUpdate> applyResults = new ArrayList<>();
+        for (EntityThreeItem item : latestByKey.values()) {
+            EntityThreeRepository.EntityThreeComparable comparable = existing.get(item.summaryUuid());
+            if (comparable == null) {
+                toUpsert.add(item.data());
+                applyResults.add(ApplyStatusUpdate.inserted(item.stagingId()));
+            } else if (comparable.isChangedComparedTo(item.data())) {
+                toUpsert.add(item.data());
+                applyResults.add(ApplyStatusUpdate.updated(item.stagingId()));
+            } else {
+                statusUpdates.add(ApplyStatusUpdate.skipped(item.stagingId(), "No changes"));
+            }
+        }
+
+        entityThreeRepository.batchUpsert(toUpsert);
+        statusUpdates.addAll(applyResults);
     }
 
-    private void collectEntityTwo(
-            ApplyCandidate candidate,
-            BusinessPayload payload,
-            List<ApplyStatusUpdate> statusUpdates,
-            List<FinalUpsertItem> records
-    ) {
-        if (payload.businessId() == null || payload.businessId().isBlank()) {
-            statusUpdates.add(new ApplyStatusUpdate(candidate.stagingId(), ProcessingLogStatus.FAILED,
-                    "ENTITY_2 message does not contain business id"));
+    private <K, T extends StagingAware<K>> Map<K, T> deduplicate(List<T> items, java.util.function.Function<T, K> keyExtractor,
+                                                                  List<ApplyStatusUpdate> statusUpdates) {
+        Map<K, T> latest = new LinkedHashMap<>();
+        for (T item : items) {
+            latest.put(keyExtractor.apply(item), item);
+        }
+
+        Set<Long> latestIds = latest.values().stream().map(StagingAware::stagingId).collect(Collectors.toSet());
+        items.stream()
+                .map(StagingAware::stagingId)
+                .filter(id -> !latestIds.contains(id))
+                .forEach(id -> statusUpdates.add(ApplyStatusUpdate.skipped(id, "Obsolete version in batch")));
+
+        return latest;
+    }
+
+    private void collectEntityOne(ApplyCandidate candidate, BusinessPayload payload, List<ApplyStatusUpdate> statusUpdates,
+                                  List<EntityOneItem> items) {
+        EntityOneData data = entityMapper.toEntityOne(payload.body());
+        if (data.trendUuid() == null || data.trendUuid().isBlank()) {
+            statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(), "ENTITY_1 message does not contain trend_uuid"));
             return;
         }
 
-        if (payload.parentBusinessId() == null || payload.parentBusinessId().isBlank()) {
-            statusUpdates.add(new ApplyStatusUpdate(candidate.stagingId(), ProcessingLogStatus.DEFERRED,
-                    "ENTITY_2 message does not contain parent id"));
+        items.add(new EntityOneItem(candidate.stagingId(), data));
+    }
+
+    private void collectEntityTwo(ApplyCandidate candidate, BusinessPayload payload, List<ApplyStatusUpdate> statusUpdates,
+                                  List<EntityTwoItem> items) {
+        EntityTwoData data = entityMapper.toEntityTwo(payload.body());
+        if (data.cmId() == null || data.cmId().isBlank() || data.trendUuid() == null || data.trendUuid().isBlank()
+                || data.summaryUuid() == null || data.summaryUuid().isBlank() || data.answerDate() == null) {
+            statusUpdates.add(ApplyStatusUpdate.deferred(candidate.stagingId(),
+                    "ENTITY_2 message does not contain full business key"));
             return;
         }
 
-        records.add(new FinalUpsertItem(candidate.stagingId(), payload.businessId(), payload.parentBusinessId(), payload.rawBody()));
+        items.add(new EntityTwoItem(candidate.stagingId(), data));
+    }
+
+    private void collectEntityThree(ApplyCandidate candidate, BusinessPayload payload, List<ApplyStatusUpdate> statusUpdates,
+                                    List<EntityThreeItem> items) {
+        EntityThreeData data = entityMapper.toEntityThree(payload.body());
+        if (data.summaryUuid() == null || data.summaryUuid().isBlank()) {
+            statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(), "ENTITY_3 message does not contain summary_uuid"));
+            return;
+        }
+
+        items.add(new EntityThreeItem(candidate.stagingId(), data));
     }
 
     private String normalizeType(String entityType) {
@@ -196,6 +234,25 @@ public class ApplyOrchestrator {
         return entityType.trim().toUpperCase();
     }
 
-    private record DedupResult(Map<String, FinalUpsertItem> latestByBusinessId, List<Long> obsoleteStagingIds) {
+    private interface StagingAware<K> {
+        long stagingId();
+    }
+
+    private record EntityOneItem(long stagingId, EntityOneData data) implements StagingAware<String> {
+        String trendUuid() {
+            return data.trendUuid();
+        }
+    }
+
+    private record EntityTwoItem(long stagingId, EntityTwoData data) implements StagingAware<EntityTwoKey> {
+        EntityTwoKey key() {
+            return data.key();
+        }
+    }
+
+    private record EntityThreeItem(long stagingId, EntityThreeData data) implements StagingAware<String> {
+        String summaryUuid() {
+            return data.summaryUuid();
+        }
     }
 }

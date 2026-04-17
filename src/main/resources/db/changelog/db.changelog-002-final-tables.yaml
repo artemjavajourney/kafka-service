@@ -7,27 +7,45 @@ databaseChangeLog:
             tableName: final_entity_1
             columns:
               - column:
-                  name: id
-                  type: BIGINT
-                  autoIncrement: true
+                  name: trend_uuid
+                  type: varchar(225)
                   constraints:
                     primaryKey: true
                     primaryKeyName: pk_final_entity_1
                     nullable: false
               - column:
-                  name: business_id
-                  type: TEXT
+                  name: trend_name
+                  type: varchar(1000)
+              - column:
+                  name: emotion
+                  type: INT
+              - column:
+                  name: is_visible
+                  type: BOOLEAN
+                  defaultValue: false
                   constraints:
                     nullable: false
               - column:
-                  name: payload
-                  type: JSONB
+                  name: product_id
+                  type: INT
+              - column:
+                  name: group_id
+                  type: varchar(255)
+              - column:
+                  name: is_archived
+                  type: BOOLEAN
+                  defaultValue: false
                   constraints:
                     nullable: false
-        - addUniqueConstraint:
-            tableName: final_entity_1
-            columnNames: business_id
-            constraintName: uq_final_entity_1_business_id
+              - column:
+                  name: employee_id_create
+                  type: varchar(255)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+              - column:
+                  name: prev_product_id
+                  type: INT
 
   - changeSet:
       id: 004-create-final-entity-2
@@ -37,36 +55,81 @@ databaseChangeLog:
             tableName: final_entity_2
             columns:
               - column:
-                  name: id
-                  type: BIGINT
-                  autoIncrement: true
+                  name: cm_id
+                  type: varchar()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: answer_date
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: date
+              - column:
+                  name: event_type_id
+                  type: INT
+              - column:
+                  name: trend_uuid
+                  type: varchar(225)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: summary_uuid
+                  type: varchar(225)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: client_segment_code
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: product_id
+                  type: INT
+              - column:
+                  name: prev_product_id
+                  type: INT
+        - addPrimaryKey:
+            tableName: final_entity_2
+            columnNames: cm_id,trend_uuid,summary_uuid,answer_date
+            constraintName: pk_final_entity_2
+
+  - changeSet:
+      id: 005-create-final-entity-3
+      author: openai
+      changes:
+        - createTable:
+            tableName: final_entity_3
+            columns:
+              - column:
+                  name: summary_uuid
+                  type: varchar(225)
                   constraints:
                     primaryKey: true
-                    primaryKeyName: pk_final_entity_2
+                    primaryKeyName: pk_final_entity_3
                     nullable: false
               - column:
-                  name: business_id
-                  type: TEXT
+                  name: summary_name
+                  type: varchar(1000)
+              - column:
+                  name: trend_uuid
+                  type: varchar(225)
                   constraints:
                     nullable: false
               - column:
-                  name: entity1_business_id
-                  type: TEXT
+                  name: sentiment
+                  type: INT
+              - column:
+                  name: is_etalon
+                  type: BOOLEAN
+                  defaultValue: false
                   constraints:
                     nullable: false
               - column:
-                  name: payload
-                  type: JSONB
-                  constraints:
-                    nullable: false
-        - addUniqueConstraint:
-            tableName: final_entity_2
-            columnNames: business_id
-            constraintName: uq_final_entity_2_business_id
-        - addForeignKeyConstraint:
-            baseTableName: final_entity_2
-            baseColumnNames: entity1_business_id
-            referencedTableName: final_entity_1
-            referencedColumnNames: business_id
-            constraintName: fk_final_entity_2_entity1_business
-            onDelete: RESTRICT
+                  name: employee_id_create
+                  type: varchar(255)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP

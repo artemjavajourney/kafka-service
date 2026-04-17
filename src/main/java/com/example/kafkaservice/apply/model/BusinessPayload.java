@@ -1,4 +1,4 @@
-package com.example.kafkaservice.apply;
+package com.example.kafkaservice.apply.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
 

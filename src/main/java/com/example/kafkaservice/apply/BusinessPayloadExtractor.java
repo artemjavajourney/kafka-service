@@ -1,5 +1,6 @@
 package com.example.kafkaservice.apply;
 
+import com.example.kafkaservice.apply.model.BusinessPayload;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

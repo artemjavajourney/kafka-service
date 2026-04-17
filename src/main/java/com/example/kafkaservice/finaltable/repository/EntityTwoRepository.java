@@ -1,7 +1,7 @@
-package com.example.kafkaservice.finaltable;
+package com.example.kafkaservice.finaltable.repository;
 
-import com.example.kafkaservice.apply.EntityTwoData;
-import com.example.kafkaservice.apply.EntityTwoKey;
+import com.example.kafkaservice.apply.model.EntityTwoData;
+import com.example.kafkaservice.apply.model.EntityTwoKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;

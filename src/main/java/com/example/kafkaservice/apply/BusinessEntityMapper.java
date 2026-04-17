@@ -1,5 +1,8 @@
 package com.example.kafkaservice.apply;
 
+import com.example.kafkaservice.apply.model.EntityOneData;
+import com.example.kafkaservice.apply.model.EntityThreeData;
+import com.example.kafkaservice.apply.model.EntityTwoData;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

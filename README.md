@@ -27,10 +27,13 @@ It avoids an expensive DB apply attempt on every incoming Kafka message and scal
 - `config` - application boot and scheduling enablement
 - `consumer` - Kafka listener (intake only)
 - `intake` - intake flow and metadata extraction
-- `apply` - batch scheduler and apply orchestration
+- `apply` - batch scheduler and apply orchestration dispatcher
+  - `apply.handler` - per-entity apply handlers (`ENTITY_1/2/3`)
+  - `apply.model` - typed payload/record models used in apply
+  - `apply.support` - shared apply utilities (dedup, resolved candidate)
 - `audit` - processing statuses and audit model
 - `repository` - staging/audit JDBC access
-- `finaltable` - bulk persistence into final tables
+- `finaltable.repository` - JDBC repositories for final tables
 
 ## Runtime notes
 

@@ -1,6 +1,6 @@
-package com.example.kafkaservice.finaltable;
+package com.example.kafkaservice.finaltable.repository;
 
-import com.example.kafkaservice.apply.EntityOneData;
+import com.example.kafkaservice.apply.model.EntityOneData;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;

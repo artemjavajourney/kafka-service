@@ -27,10 +27,13 @@ It avoids an expensive DB apply attempt on every incoming Kafka message and scal
 - `config` - application boot and scheduling enablement
 - `consumer` - Kafka listener (intake only)
 - `intake` - intake flow and metadata extraction
-- `apply` - batch scheduler and apply orchestration
+- `apply` - batch scheduler and apply orchestration dispatcher
+  - `apply.handler` - per-entity apply handlers (`ENTITY_1/2/3`)
+  - `apply.model` - typed payload/record models used in apply
+  - `apply.support` - shared apply utilities (dedup, resolved candidate)
 - `audit` - processing statuses and audit model
 - `repository` - staging/audit JDBC access
-- `finaltable` - bulk persistence into final tables
+- `finaltable.repository` - JDBC repositories for final tables
 
 ## Runtime notes
 
@@ -42,3 +45,29 @@ To run the service, you need:
 ## Key tunables
 
 - `app.apply.fixed-delay-ms` - scheduler delay between apply ticks
+
+## Standalone fake producer for E2E checks
+
+A simple standalone producer is available at:
+- `com.example.kafkaservice.tools.FakeKafkaProducer`
+
+Run it separately from the main service to push demo events into Kafka topic:
+
+```bash
+mvn -q -DskipTests org.codehaus.mojo:exec-maven-plugin:3.5.0:java \
+  -Dexec.mainClass=com.example.kafkaservice.tools.FakeKafkaProducer \
+  -Dexec.args='--bootstrap-servers localhost:9092 --topic voiceres --scenario demo --count 6'
+```
+
+Supported scenarios:
+- `demo` (cycles ENTITY_1 -> ENTITY_2 -> ENTITY_3)
+- `entity1`
+- `entity2`
+- `entity3`
+
+Useful args:
+- `--bootstrap-servers`
+- `--topic`
+- `--scenario`
+- `--count`
+- `--key-prefix`

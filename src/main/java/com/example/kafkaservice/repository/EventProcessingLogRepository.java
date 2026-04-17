@@ -87,7 +87,10 @@ public class EventProcessingLogRepository {
                     update event_processing_log epl
                     set status = :processingStatus,
                         updated_at = :now,
-                        error_message = null
+                        error_message = null,
+                        records_inserted = 0,
+                        records_updated = 0,
+                        records_skipped = 0
                     from picked
                     where epl.staging_id = picked.staging_id
                     returning epl.staging_id,
@@ -122,6 +125,9 @@ public class EventProcessingLogRepository {
                 update event_processing_log
                 set status = ?,
                     error_message = ?,
+                    records_inserted = ?,
+                    records_updated = ?,
+                    records_skipped = ?,
                     updated_at = ?
                 where staging_id = ?
                 """,
@@ -131,8 +137,11 @@ public class EventProcessingLogRepository {
                         ApplyStatusUpdate update = updates.get(i);
                         ps.setString(1, update.status().name());
                         ps.setString(2, update.errorMessage());
-                        ps.setTimestamp(3, Timestamp.from(now.toInstant()));
-                        ps.setLong(4, update.stagingId());
+                        ps.setInt(3, update.recordsInserted());
+                        ps.setInt(4, update.recordsUpdated());
+                        ps.setInt(5, update.recordsSkipped());
+                        ps.setTimestamp(6, Timestamp.from(now.toInstant()));
+                        ps.setLong(7, update.stagingId());
                     }
 
                     @Override

@@ -23,7 +23,7 @@ public class BusinessPayloadExtractor {
             }
 
             JsonNode body = inner.path("body");
-            String entityType = firstText(body, "entity_type", "entityType", "event_type_id", "eventTypeId");
+            String entityType = firstText(body, "entity_type", "entityType");
             if (entityType == null || entityType.isBlank()) {
                 entityType = fallbackEntityType;
             }

@@ -43,7 +43,7 @@ public class MessageMetadataExtractor {
             String entityType = null;
             if (inner != null) {
                 JsonNode body = inner.path("body");
-                entityType = firstText(body, "entity_type", "entityType", "event_type_id", "eventTypeId");
+                entityType = firstText(body, "entity_type", "entityType");
             }
 
             return new ExtractedMetadata(

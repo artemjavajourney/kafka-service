@@ -1,36 +1,58 @@
-package com.example.kafkaservice.apply;
+package com.example.kafkaservice.message;
 
-import com.example.kafkaservice.apply.model.BusinessPayload;
+import com.example.kafkaservice.intake.ParseStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class BusinessPayloadExtractor {
+public class RawMessageParser {
 
     private final ObjectMapper objectMapper;
 
-    public BusinessPayload extract(String rawMessage, String fallbackEntityType) {
+    public ParsedRawMessage parse(String rawMessage, String fallbackEntityType) {
         try {
             JsonNode root = objectMapper.readTree(rawMessage);
-            JsonNode resultJson = root.path("result_json");
-            JsonNode inner = resultJson;
+            String loadingId = firstText(root, "loading_id", "loadingId");
 
-            if (resultJson.isTextual()) {
-                inner = objectMapper.readTree(resultJson.asText());
+            JsonNode body = NullNode.getInstance();
+            ParseStatus parseStatus = ParseStatus.PARSED;
+            String errorMessage = null;
+
+            JsonNode resultJsonNode = root.path("result_json");
+            if (!resultJsonNode.isMissingNode() && !resultJsonNode.isNull()) {
+                JsonNode inner = resultJsonNode;
+                if (resultJsonNode.isTextual()) {
+                    try {
+                        inner = objectMapper.readTree(resultJsonNode.asText());
+                    } catch (Exception e) {
+                        parseStatus = ParseStatus.RAW_ONLY;
+                        errorMessage = "Failed to parse result_json as nested JSON: " + e.getMessage();
+                    }
+                } else if (!resultJsonNode.isObject()) {
+                    parseStatus = ParseStatus.RAW_ONLY;
+                    errorMessage = "result_json exists but is neither JSON object nor JSON string";
+                }
+
+                if (parseStatus == ParseStatus.PARSED) {
+                    body = inner.path("body");
+                }
+            } else {
+                parseStatus = ParseStatus.RAW_ONLY;
+                errorMessage = "result_json is absent or null";
             }
 
-            JsonNode body = inner.path("body");
             String entityType = firstText(body, "entity_type", "entityType", "event_type_id", "eventTypeId");
             if (entityType == null || entityType.isBlank()) {
                 entityType = fallbackEntityType;
             }
 
-            return new BusinessPayload(entityType, body);
+            return new ParsedRawMessage(loadingId, entityType, body, parseStatus, errorMessage);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to parse raw message for apply: " + e.getMessage(), e);
+            return new ParsedRawMessage(null, fallbackEntityType, NullNode.getInstance(), ParseStatus.INVALID_JSON, e.getMessage());
         }
     }
 
@@ -77,6 +99,7 @@ public class BusinessPayloadExtractor {
         if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
             return false;
         }
+
         return null;
     }
 }

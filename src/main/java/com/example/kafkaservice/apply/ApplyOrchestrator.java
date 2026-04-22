@@ -1,9 +1,11 @@
 package com.example.kafkaservice.apply;
 
 import com.example.kafkaservice.apply.handler.ApplyEntityHandler;
-import com.example.kafkaservice.apply.model.BusinessPayload;
-import com.example.kafkaservice.apply.support.ResolvedApplyCandidate;
+import com.example.kafkaservice.apply.handler.ApplyHandlerMessage;
 import com.example.kafkaservice.audit.ProcessingLogStatus;
+import com.example.kafkaservice.intake.ParseStatus;
+import com.example.kafkaservice.message.ParsedRawMessage;
+import com.example.kafkaservice.message.RawMessageParser;
 import com.example.kafkaservice.repository.EventProcessingLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +27,7 @@ public class ApplyOrchestrator {
     private static final int DEFAULT_BATCH_SIZE = 500;
 
     private final EventProcessingLogRepository eventProcessingLogRepository;
-    private final BusinessPayloadExtractor businessPayloadExtractor;
+    private final RawMessageParser rawMessageParser;
     private final List<ApplyEntityHandler> handlers;
 
     @Transactional
@@ -37,27 +39,27 @@ public class ApplyOrchestrator {
         }
 
         List<ApplyStatusUpdate> statusUpdates = new ArrayList<>();
-        Map<String, List<ResolvedApplyCandidate>> candidatesByType = new HashMap<>();
+        Map<String, List<ApplyHandlerMessage>> candidatesByType = new HashMap<>();
         for (ApplyEntityHandler handler : handlers) {
             candidatesByType.put(handler.supportedType(), new ArrayList<>());
         }
 
         for (ApplyCandidate candidate : candidates) {
-            try {
-                BusinessPayload payload = businessPayloadExtractor.extract(candidate.rawMessage(), candidate.entityType());
-                String normalizedType = normalizeType(payload.entityType());
-
-                List<ResolvedApplyCandidate> typedCandidates = candidatesByType.get(normalizedType);
-                if (typedCandidates == null) {
-                    statusUpdates.add(ApplyStatusUpdate.skipped(candidate.stagingId(), "Unknown entity type: " + payload.entityType()));
-                    continue;
-                }
-
-                typedCandidates.add(new ResolvedApplyCandidate(candidate, payload));
-            } catch (Exception e) {
+            ParsedRawMessage parsed = rawMessageParser.parse(candidate.rawMessage(), candidate.entityType());
+            if (parsed.parseStatus() != ParseStatus.PARSED) {
                 statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(),
-                        "Failed to parse raw message for apply: " + e.getMessage()));
+                        "Failed to parse raw message for apply: " + parsed.errorMessage()));
+                continue;
             }
+
+            String normalizedType = normalizeType(parsed.entityType());
+            List<ApplyHandlerMessage> typedCandidates = candidatesByType.get(normalizedType);
+            if (typedCandidates == null) {
+                statusUpdates.add(ApplyStatusUpdate.skipped(candidate.stagingId(), "Unknown entity type: " + parsed.entityType()));
+                continue;
+            }
+
+            typedCandidates.add(new ApplyHandlerMessage(candidate.stagingId(), parsed.body()));
         }
 
         for (ApplyEntityHandler handler : handlers) {

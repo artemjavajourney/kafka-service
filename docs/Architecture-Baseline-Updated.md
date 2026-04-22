@@ -12,7 +12,7 @@ Global ordering across the topic must not be assumed.
 
 The selected target pipeline is:
 
-Kafka message -> intake validation -> save raw message to `staging_inbox` -> create `event_processing_log` with `STAGED` -> commit/ack offset -> apply from staging in required dependency order -> write final tables -> update `event_processing_log`
+Kafka message -> intake validation -> save raw message to `staging_inbox` -> create `event_processing_log` with `STAGED` -> commit/ack offset -> apply batch by `STAGED/DEFERRED` status -> write final tables -> update `event_processing_log`
 
 ## Core rule for offset progression
 
@@ -24,10 +24,8 @@ Commit/ack before durable intake persistence is an architectural violation.
 
 ## Why staging is part of the baseline now
 
-Some business entities depend on others in the final database.
-Kafka topic order is not sufficient to guarantee safe final relational load order.
-Therefore, staging/inbox persistence is the durable intake boundary.
-Final table writes happen in a separate apply phase.
+Staging/inbox persistence is the durable intake boundary and allows decoupling Kafka consumption from DB apply throughput.
+Final table writes happen in a separate apply phase and can be retried independently from Kafka offset progression.
 
 ## Intake phase responsibilities
 
@@ -40,8 +38,8 @@ Final table writes happen in a separate apply phase.
 
 ## Apply phase responsibilities
 
-- read staged rows by `loading_id`
-- process entities in required dependency order
+- read staged rows by processing status (`STAGED`/`DEFERRED`)
+- route by parsed `entity_type` to per-entity handlers
 - call per-entity handlers in the apply phase
 - write final business tables
 - decide `APPLIED / SKIPPED / FAILED / DEFERRED`

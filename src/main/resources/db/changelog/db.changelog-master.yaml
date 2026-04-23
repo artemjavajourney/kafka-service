@@ -3,3 +3,5 @@ databaseChangeLog:
       file: db/changelog/db.changelog-001-intake.yaml
   - include:
       file: db/changelog/db.changelog-002-final-tables.yaml
+  - include:
+      file: db/changelog/db.changelog-003-staging-inbox-optimization.yaml

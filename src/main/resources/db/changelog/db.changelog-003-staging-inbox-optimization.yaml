@@ -1,0 +1,32 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-optimize-staging-inbox
+      author: openai
+      changes:
+        - dropIndex:
+            tableName: staging_inbox
+            indexName: idx_staging_inbox_loading_id
+        - dropIndex:
+            tableName: staging_inbox
+            indexName: idx_staging_inbox_entity_type
+        - dropIndex:
+            tableName: staging_inbox
+            indexName: idx_staging_inbox_intake_status
+        - dropColumn:
+            tableName: staging_inbox
+            columnName: loading_id
+        - dropColumn:
+            tableName: staging_inbox
+            columnName: entity_type
+        - dropColumn:
+            tableName: staging_inbox
+            columnName: parse_status
+        - dropColumn:
+            tableName: staging_inbox
+            columnName: intake_status
+        - dropColumn:
+            tableName: staging_inbox
+            columnName: error_message
+        - dropColumn:
+            tableName: staging_inbox
+            columnName: staged_at

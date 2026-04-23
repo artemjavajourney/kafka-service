@@ -3,6 +3,7 @@ package com.example.kafkaservice.apply;
 import com.example.kafkaservice.apply.model.EntityOneData;
 import com.example.kafkaservice.apply.model.EntityThreeData;
 import com.example.kafkaservice.apply.model.EntityTwoData;
+import com.example.kafkaservice.message.RawMessageParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,46 +15,46 @@ import java.time.OffsetDateTime;
 @RequiredArgsConstructor
 public class BusinessEntityMapper {
 
-    private final BusinessPayloadExtractor payloadExtractor;
+    private final RawMessageParser rawMessageParser;
 
     public EntityOneData toEntityOne(JsonNode body) {
         return new EntityOneData(
-                payloadExtractor.firstText(body, "trend_uuid", "trendUuid", "id", "entity_id"),
-                payloadExtractor.firstText(body, "trend_name", "trendName"),
-                payloadExtractor.firstInt(body, "emotion"),
-                payloadExtractor.firstBoolean(body, "is_visible", "isVisible"),
-                payloadExtractor.firstInt(body, "product_id", "productId"),
-                payloadExtractor.firstText(body, "group_id", "groupId"),
-                payloadExtractor.firstBoolean(body, "is_archived", "isArchived"),
-                payloadExtractor.firstText(body, "employee_id_create", "employeeIdCreate"),
-                parseOffsetDateTime(payloadExtractor.firstText(body, "created_at", "createdAt")),
-                payloadExtractor.firstInt(body, "prev_product_id", "prevProductId")
+                rawMessageParser.firstText(body, "trend_uuid", "trendUuid", "id", "entity_id"),
+                rawMessageParser.firstText(body, "trend_name", "trendName"),
+                rawMessageParser.firstInt(body, "emotion"),
+                rawMessageParser.firstBoolean(body, "is_visible", "isVisible"),
+                rawMessageParser.firstInt(body, "product_id", "productId"),
+                rawMessageParser.firstText(body, "group_id", "groupId"),
+                rawMessageParser.firstBoolean(body, "is_archived", "isArchived"),
+                rawMessageParser.firstText(body, "employee_id_create", "employeeIdCreate"),
+                parseOffsetDateTime(rawMessageParser.firstText(body, "created_at", "createdAt")),
+                rawMessageParser.firstInt(body, "prev_product_id", "prevProductId")
         );
     }
 
     public EntityTwoData toEntityTwo(JsonNode body) {
         return new EntityTwoData(
-                payloadExtractor.firstText(body, "cm_id", "cmId", "id", "entity_id"),
-                parseLocalDate(payloadExtractor.firstText(body, "answer_date", "answerDate")),
-                parseLocalDate(payloadExtractor.firstText(body, "created_at", "createdAt")),
-                payloadExtractor.firstInt(body, "event_type_id", "eventTypeId"),
-                payloadExtractor.firstText(body, "trend_uuid", "trendUuid", "entity1_id", "parent_id"),
-                payloadExtractor.firstText(body, "summary_uuid", "summaryUuid"),
-                payloadExtractor.firstText(body, "client_segment_code", "clientSegmentCode"),
-                payloadExtractor.firstInt(body, "product_id", "productId"),
-                payloadExtractor.firstInt(body, "prev_product_id", "prevProductId")
+                rawMessageParser.firstText(body, "cm_id", "cmId", "id", "entity_id"),
+                parseLocalDate(rawMessageParser.firstText(body, "answer_date", "answerDate")),
+                parseLocalDate(rawMessageParser.firstText(body, "created_at", "createdAt")),
+                rawMessageParser.firstInt(body, "event_type_id", "eventTypeId"),
+                rawMessageParser.firstText(body, "trend_uuid", "trendUuid", "entity1_id", "parent_id"),
+                rawMessageParser.firstText(body, "summary_uuid", "summaryUuid"),
+                rawMessageParser.firstText(body, "client_segment_code", "clientSegmentCode"),
+                rawMessageParser.firstInt(body, "product_id", "productId"),
+                rawMessageParser.firstInt(body, "prev_product_id", "prevProductId")
         );
     }
 
     public EntityThreeData toEntityThree(JsonNode body) {
         return new EntityThreeData(
-                payloadExtractor.firstText(body, "summary_uuid", "summaryUuid", "id", "entity_id"),
-                payloadExtractor.firstText(body, "summary_name", "summaryName"),
-                payloadExtractor.firstText(body, "trend_uuid", "trendUuid", "entity1_id", "parent_id"),
-                payloadExtractor.firstInt(body, "sentiment"),
-                payloadExtractor.firstBoolean(body, "is_etalon", "isEtalon"),
-                payloadExtractor.firstText(body, "employee_id_create", "employeeIdCreate"),
-                parseOffsetDateTime(payloadExtractor.firstText(body, "created_at", "createdAt"))
+                rawMessageParser.firstText(body, "summary_uuid", "summaryUuid", "id", "entity_id"),
+                rawMessageParser.firstText(body, "summary_name", "summaryName"),
+                rawMessageParser.firstText(body, "trend_uuid", "trendUuid", "entity1_id", "parent_id"),
+                rawMessageParser.firstInt(body, "sentiment"),
+                rawMessageParser.firstBoolean(body, "is_etalon", "isEtalon"),
+                rawMessageParser.firstText(body, "employee_id_create", "employeeIdCreate"),
+                parseOffsetDateTime(rawMessageParser.firstText(body, "created_at", "createdAt"))
         );
     }
 

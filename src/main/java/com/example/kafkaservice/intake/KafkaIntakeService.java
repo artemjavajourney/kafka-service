@@ -1,6 +1,8 @@
 package com.example.kafkaservice.intake;
 
 import com.example.kafkaservice.audit.EventProcessingLogRecord;
+import com.example.kafkaservice.message.ParsedRawMessage;
+import com.example.kafkaservice.message.RawMessageParser;
 import com.example.kafkaservice.repository.EventProcessingLogRepository;
 import com.example.kafkaservice.repository.StagingInboxRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,28 +19,22 @@ import java.time.ZoneOffset;
 @RequiredArgsConstructor
 public class KafkaIntakeService {
 
-    private final MessageMetadataExtractor messageMetadataExtractor;
+    private final RawMessageParser rawMessageParser;
     private final StagingInboxRepository stagingInboxRepository;
     private final EventProcessingLogRepository eventProcessingLogRepository;
 
     @Transactional
-    public IntakeResult intake(ConsumerRecord<String, String> record) {
+    public void intake(ConsumerRecord<String, String> record) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
 
-        ExtractedMetadata metadata = messageMetadataExtractor.extract(record.value());
+        ParsedRawMessage parsed = rawMessageParser.parse(record.value(), null);
 
         StagingInboxRecord stagingRecord = new StagingInboxRecord(
                 record.topic(),
                 record.partition(),
                 record.offset(),
                 record.key(),
-                metadata.loadingId(),
-                metadata.entityType(),
                 record.value(),
-                metadata.parseStatus(),
-                IntakeStatus.STAGED,
-                metadata.errorMessage(),
-                now,
                 now
         );
 
@@ -47,8 +43,8 @@ public class KafkaIntakeService {
         eventProcessingLogRepository.insertStagedIfAbsent(
                 EventProcessingLogRecord.staged(
                         stagingId,
-                        metadata.loadingId(),
-                        metadata.entityType(),
+                        parsed.loadingId(),
+                        parsed.entityType(),
                         now
                 )
         );
@@ -59,16 +55,10 @@ public class KafkaIntakeService {
                 record.partition(),
                 record.offset(),
                 record.key(),
-                metadata.loadingId(),
-                metadata.entityType(),
-                metadata.parseStatus()
+                parsed.loadingId(),
+                parsed.entityType(),
+                parsed.parseStatus()
         );
 
-        return new IntakeResult(
-                stagingId,
-                metadata.loadingId(),
-                metadata.entityType(),
-                metadata.parseStatus()
-        );
     }
 }

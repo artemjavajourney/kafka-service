@@ -1,11 +1,9 @@
 package com.example.kafkaservice.apply.handler;
 
-import com.example.kafkaservice.apply.ApplyCandidate;
 import com.example.kafkaservice.apply.ApplyStatusUpdate;
 import com.example.kafkaservice.apply.BusinessEntityMapper;
 import com.example.kafkaservice.apply.model.EntityThreeData;
 import com.example.kafkaservice.apply.support.ApplyDedupeUtil;
-import com.example.kafkaservice.apply.support.ResolvedApplyCandidate;
 import com.example.kafkaservice.finaltable.repository.EntityThreeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
@@ -29,21 +27,20 @@ public class EntityThreeApplyHandler implements ApplyEntityHandler {
     }
 
     @Override
-    public void handle(List<ResolvedApplyCandidate> candidates, List<ApplyStatusUpdate> statusUpdates) {
+    public void handle(List<ApplyHandlerMessage> candidates, List<ApplyStatusUpdate> statusUpdates) {
         if (candidates.isEmpty()) {
             return;
         }
 
         List<EntityThreeItem> items = new ArrayList<>();
-        for (ResolvedApplyCandidate resolved : candidates) {
-            ApplyCandidate candidate = resolved.candidate();
-            EntityThreeData data = entityMapper.toEntityThree(resolved.payload().body());
+        for (ApplyHandlerMessage message : candidates) {
+            EntityThreeData data = entityMapper.toEntityThree(message.body());
             if (data.summaryUuid() == null || data.summaryUuid().isBlank()) {
-                statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(), "ENTITY_3 message does not contain summary_uuid"));
+                statusUpdates.add(ApplyStatusUpdate.failed(message.stagingId(), "ENTITY_3 message does not contain summary_uuid"));
                 continue;
             }
 
-            items.add(new EntityThreeItem(candidate.stagingId(), data));
+            items.add(new EntityThreeItem(message.stagingId(), data));
         }
 
         Map<String, EntityThreeItem> latestByKey = ApplyDedupeUtil.deduplicate(items, EntityThreeItem::summaryUuid, EntityThreeItem::stagingId, statusUpdates);

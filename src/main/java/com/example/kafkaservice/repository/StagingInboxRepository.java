@@ -18,14 +18,8 @@ public class StagingInboxRepository {
                 .addValue("kafkaPartition", record.kafkaPartition())
                 .addValue("kafkaOffset", record.kafkaOffset())
                 .addValue("kafkaKey", record.kafkaKey())
-                .addValue("loadingId", record.loadingId())
-                .addValue("entityType", record.entityType())
                 .addValue("rawMessage", record.rawMessage())
-                .addValue("parseStatus", record.parseStatus().name())
-                .addValue("intakeStatus", record.intakeStatus().name())
-                .addValue("errorMessage", record.errorMessage())
-                .addValue("receivedAt", record.receivedAt())
-                .addValue("stagedAt", record.stagedAt());
+                .addValue("receivedAt", record.receivedAt());
 
         Long insertedId = jdbcTemplate.query(
                 """
@@ -34,27 +28,15 @@ public class StagingInboxRepository {
                     kafka_partition,
                     kafka_offset,
                     kafka_key,
-                    loading_id,
-                    entity_type,
                     raw_message,
-                    parse_status,
-                    intake_status,
-                    error_message,
-                    received_at,
-                    staged_at
+                    received_at
                 ) values (
                     :kafkaTopic,
                     :kafkaPartition,
                     :kafkaOffset,
                     :kafkaKey,
-                    :loadingId,
-                    :entityType,
                     :rawMessage,
-                    :parseStatus,
-                    :intakeStatus,
-                    :errorMessage,
-                    :receivedAt,
-                    :stagedAt
+                    :receivedAt
                 )
                 on conflict (kafka_topic, kafka_partition, kafka_offset) do nothing
                 returning id

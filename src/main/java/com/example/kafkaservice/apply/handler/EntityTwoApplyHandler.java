@@ -1,13 +1,10 @@
 package com.example.kafkaservice.apply.handler;
 
-import com.example.kafkaservice.apply.ApplyCandidate;
 import com.example.kafkaservice.apply.ApplyStatusUpdate;
 import com.example.kafkaservice.apply.BusinessEntityMapper;
 import com.example.kafkaservice.apply.model.EntityTwoData;
 import com.example.kafkaservice.apply.model.EntityTwoKey;
 import com.example.kafkaservice.apply.support.ApplyDedupeUtil;
-import com.example.kafkaservice.apply.support.ResolvedApplyCandidate;
-import com.example.kafkaservice.finaltable.repository.EntityOneRepository;
 import com.example.kafkaservice.finaltable.repository.EntityTwoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
@@ -16,8 +13,6 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 @Order(2)
@@ -25,7 +20,6 @@ import java.util.stream.Collectors;
 public class EntityTwoApplyHandler implements ApplyEntityHandler {
 
     private final BusinessEntityMapper entityMapper;
-    private final EntityOneRepository entityOneRepository;
     private final EntityTwoRepository entityTwoRepository;
 
     @Override
@@ -34,40 +28,31 @@ public class EntityTwoApplyHandler implements ApplyEntityHandler {
     }
 
     @Override
-    public void handle(List<ResolvedApplyCandidate> candidates, List<ApplyStatusUpdate> statusUpdates) {
+    public void handle(List<ApplyHandlerMessage> candidates, List<ApplyStatusUpdate> statusUpdates) {
         if (candidates.isEmpty()) {
             return;
         }
 
         List<EntityTwoItem> items = new ArrayList<>();
-        for (ResolvedApplyCandidate resolved : candidates) {
-            ApplyCandidate candidate = resolved.candidate();
-            EntityTwoData data = entityMapper.toEntityTwo(resolved.payload().body());
+        for (ApplyHandlerMessage message : candidates) {
+            EntityTwoData data = entityMapper.toEntityTwo(message.body());
             if (data.cmId() == null || data.cmId().isBlank() || data.trendUuid() == null || data.trendUuid().isBlank()
                     || data.summaryUuid() == null || data.summaryUuid().isBlank() || data.answerDate() == null) {
-                statusUpdates.add(ApplyStatusUpdate.deferred(candidate.stagingId(),
+                statusUpdates.add(ApplyStatusUpdate.deferred(message.stagingId(),
                         "ENTITY_2 message does not contain full business key"));
                 continue;
             }
 
-            items.add(new EntityTwoItem(candidate.stagingId(), data));
+            items.add(new EntityTwoItem(message.stagingId(), data));
         }
 
         Map<EntityTwoKey, EntityTwoItem> latestByKey = ApplyDedupeUtil.deduplicate(items, EntityTwoItem::key, EntityTwoItem::stagingId, statusUpdates);
 
-        Set<String> trendUuids = latestByKey.values().stream().map(i -> i.data().trendUuid()).collect(Collectors.toSet());
-        Set<String> existingParents = entityOneRepository.findExistingTrendUuids(trendUuids);
         Map<EntityTwoKey, EntityTwoRepository.EntityTwoComparable> existing = entityTwoRepository.findComparableByKeys(latestByKey.keySet());
 
         List<EntityTwoData> toUpsert = new ArrayList<>();
         List<ApplyStatusUpdate> applyResults = new ArrayList<>();
         for (EntityTwoItem item : latestByKey.values()) {
-            if (!existingParents.contains(item.data().trendUuid())) {
-                statusUpdates.add(ApplyStatusUpdate.deferred(item.stagingId(),
-                        "Parent ENTITY_1 not found yet for trend_uuid=" + item.data().trendUuid()));
-                continue;
-            }
-
             EntityTwoRepository.EntityTwoComparable comparable = existing.get(item.key());
             if (comparable == null) {
                 toUpsert.add(item.data());

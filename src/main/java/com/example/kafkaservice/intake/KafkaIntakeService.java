@@ -24,7 +24,7 @@ public class KafkaIntakeService {
     private final EventProcessingLogRepository eventProcessingLogRepository;
 
     @Transactional
-    public IntakeResult intake(ConsumerRecord<String, String> record) {
+    public void intake(ConsumerRecord<String, String> record) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
 
         ParsedRawMessage parsed = rawMessageParser.parse(record.value(), null);
@@ -60,11 +60,5 @@ public class KafkaIntakeService {
                 parsed.parseStatus()
         );
 
-        return new IntakeResult(
-                stagingId,
-                parsed.loadingId(),
-                parsed.entityType(),
-                parsed.parseStatus()
-        );
     }
 }

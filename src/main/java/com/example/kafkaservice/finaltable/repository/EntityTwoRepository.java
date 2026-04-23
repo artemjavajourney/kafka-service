@@ -81,6 +81,7 @@ public class EntityTwoRepository {
                        trend_uuid,
                        summary_uuid,
                        answer_date,
+                       created_at,
                        event_type_id,
                        client_segment_code,
                        product_id,
@@ -123,6 +124,7 @@ public class EntityTwoRepository {
                         );
 
                         result.put(key, new EntityTwoComparable(
+                                rs.getDate("created_at") == null ? null : rs.getDate("created_at").toLocalDate(),
                                 (Integer) rs.getObject("event_type_id"),
                                 rs.getString("client_segment_code"),
                                 (Integer) rs.getObject("product_id"),
@@ -135,13 +137,15 @@ public class EntityTwoRepository {
     }
 
     public record EntityTwoComparable(
+            java.time.LocalDate createdAt,
             Integer eventTypeId,
             String clientSegmentCode,
             Integer productId,
             Integer prevProductId
     ) {
         public boolean isChangedComparedTo(EntityTwoData data) {
-            return !java.util.Objects.equals(eventTypeId, data.eventTypeId())
+            return !java.util.Objects.equals(createdAt, data.createdAt())
+                    || !java.util.Objects.equals(eventTypeId, data.eventTypeId())
                     || !java.util.Objects.equals(clientSegmentCode, data.clientSegmentCode())
                     || !java.util.Objects.equals(productId, data.productId())
                     || !java.util.Objects.equals(prevProductId, data.prevProductId());

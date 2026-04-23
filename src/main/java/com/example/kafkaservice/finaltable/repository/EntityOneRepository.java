@@ -76,22 +76,6 @@ public class EntityOneRepository {
         );
     }
 
-    public Set<String> findExistingTrendUuids(Set<String> trendUuids) {
-        if (trendUuids.isEmpty()) {
-            return Collections.emptySet();
-        }
-
-        return Set.copyOf(jdbcTemplate.queryForList(
-                """
-                select trend_uuid
-                from final_entity_1
-                where trend_uuid in (:ids)
-                """,
-                new MapSqlParameterSource("ids", trendUuids),
-                String.class
-        ));
-    }
-
     public Map<String, EntityOneComparable> findComparableByTrendUuids(Set<String> trendUuids) {
         if (trendUuids.isEmpty()) {
             return Collections.emptyMap();
@@ -102,7 +86,13 @@ public class EntityOneRepository {
                 select trend_uuid,
                        trend_name,
                        emotion,
-                       product_id
+                       is_visible,
+                       product_id,
+                       group_id,
+                       is_archived,
+                       employee_id_create,
+                       created_at,
+                       prev_product_id
                 from final_entity_1
                 where trend_uuid in (:ids)
                 """,
@@ -115,7 +105,13 @@ public class EntityOneRepository {
                                 new EntityOneComparable(
                                         rs.getString("trend_name"),
                                         (Integer) rs.getObject("emotion"),
-                                        (Integer) rs.getObject("product_id")
+                                        (Boolean) rs.getObject("is_visible"),
+                                        (Integer) rs.getObject("product_id"),
+                                        rs.getString("group_id"),
+                                        (Boolean) rs.getObject("is_archived"),
+                                        rs.getString("employee_id_create"),
+                                        rs.getTimestamp("created_at") == null ? null : rs.getTimestamp("created_at").toInstant().atOffset(java.time.ZoneOffset.UTC),
+                                        (Integer) rs.getObject("prev_product_id")
                                 )
                         );
                     }
@@ -127,12 +123,24 @@ public class EntityOneRepository {
     public record EntityOneComparable(
             String trendName,
             Integer emotion,
-            Integer productId
+            Boolean isVisible,
+            Integer productId,
+            String groupId,
+            Boolean isArchived,
+            String employeeIdCreate,
+            java.time.OffsetDateTime createdAt,
+            Integer prevProductId
     ) {
         public boolean isChangedComparedTo(EntityOneData data) {
             return !java.util.Objects.equals(trendName, data.trendName())
                     || !java.util.Objects.equals(emotion, data.emotion())
-                    || !java.util.Objects.equals(productId, data.productId());
+                    || !java.util.Objects.equals(isVisible, data.isVisible())
+                    || !java.util.Objects.equals(productId, data.productId())
+                    || !java.util.Objects.equals(groupId, data.groupId())
+                    || !java.util.Objects.equals(isArchived, data.isArchived())
+                    || !java.util.Objects.equals(employeeIdCreate, data.employeeIdCreate())
+                    || !java.util.Objects.equals(createdAt, data.createdAt())
+                    || !java.util.Objects.equals(prevProductId, data.prevProductId());
         }
     }
 }

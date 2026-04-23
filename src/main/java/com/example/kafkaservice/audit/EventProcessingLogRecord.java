@@ -30,4 +30,20 @@ public record EventProcessingLogRecord(
                 now
         );
     }
+
+    public static EventProcessingLogRecord failed(long stagingId, String loadingId, String errorMessage, OffsetDateTime now) {
+        return new EventProcessingLogRecord(
+                stagingId,
+                loadingId,
+                null,
+                ProcessingLogStatus.FAILED,
+                1,
+                0,
+                0,
+                0,
+                errorMessage,
+                now,
+                now
+        );
+    }
 }

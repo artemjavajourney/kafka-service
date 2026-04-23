@@ -5,7 +5,6 @@ import com.example.kafkaservice.apply.ApplyStatusUpdate;
 import com.example.kafkaservice.apply.BusinessEntityMapper;
 import com.example.kafkaservice.apply.model.EntityThreeData;
 import com.example.kafkaservice.apply.support.ApplyDedupeUtil;
-import com.example.kafkaservice.apply.support.ResolvedApplyCandidate;
 import com.example.kafkaservice.finaltable.repository.EntityThreeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
@@ -29,17 +28,18 @@ public class EntityThreeApplyHandler implements ApplyEntityHandler {
     }
 
     @Override
-    public void handle(List<ResolvedApplyCandidate> candidates, List<ApplyStatusUpdate> statusUpdates) {
+    public void handle(List<ApplyCandidate> candidates, List<ApplyStatusUpdate> statusUpdates) {
         if (candidates.isEmpty()) {
             return;
         }
 
         List<EntityThreeItem> items = new ArrayList<>();
-        for (ResolvedApplyCandidate resolved : candidates) {
-            ApplyCandidate candidate = resolved.candidate();
-            EntityThreeData data = entityMapper.toEntityThree(resolved.payload().body());
-            if (data.summaryUuid() == null || data.summaryUuid().isBlank()) {
-                statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(), "ENTITY_3 message does not contain summary_uuid"));
+        for (ApplyCandidate candidate : candidates) {
+            EntityThreeData data = entityMapper.toEntityThree(candidate.body());
+            if (data.summaryUuid() == null || data.summaryUuid().isBlank()
+                    || data.trendUuid() == null || data.trendUuid().isBlank()) {
+                statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(),
+                        "ENTITY_3 message does not contain summary_uuid and trend_uuid"));
                 continue;
             }
 

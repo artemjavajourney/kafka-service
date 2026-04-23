@@ -78,7 +78,9 @@ public class EntityThreeRepository {
                        summary_name,
                        trend_uuid,
                        sentiment,
-                       is_etalon
+                       is_etalon,
+                       employee_id_create,
+                       created_at
                 from final_entity_3
                 where summary_uuid in (:ids)
                 """,
@@ -92,7 +94,9 @@ public class EntityThreeRepository {
                                         rs.getString("summary_name"),
                                         rs.getString("trend_uuid"),
                                         (Integer) rs.getObject("sentiment"),
-                                        (Boolean) rs.getObject("is_etalon")
+                                        (Boolean) rs.getObject("is_etalon"),
+                                        rs.getString("employee_id_create"),
+                                        rs.getTimestamp("created_at") == null ? null : rs.getTimestamp("created_at").toInstant().atOffset(java.time.ZoneOffset.UTC)
                                 )
                         );
                     }
@@ -105,13 +109,17 @@ public class EntityThreeRepository {
             String summaryName,
             String trendUuid,
             Integer sentiment,
-            Boolean isEtalon
+            Boolean isEtalon,
+            String employeeIdCreate,
+            java.time.OffsetDateTime createdAt
     ) {
         public boolean isChangedComparedTo(EntityThreeData data) {
             return !java.util.Objects.equals(summaryName, data.summaryName())
                     || !java.util.Objects.equals(trendUuid, data.trendUuid())
                     || !java.util.Objects.equals(sentiment, data.sentiment())
-                    || !java.util.Objects.equals(isEtalon, data.isEtalon());
+                    || !java.util.Objects.equals(isEtalon, data.isEtalon())
+                    || !java.util.Objects.equals(employeeIdCreate, data.employeeIdCreate())
+                    || !java.util.Objects.equals(createdAt, data.createdAt());
         }
     }
 }

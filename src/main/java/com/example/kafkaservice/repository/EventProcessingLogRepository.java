@@ -3,6 +3,7 @@ package com.example.kafkaservice.repository;
 import com.example.kafkaservice.apply.ApplyCandidate;
 import com.example.kafkaservice.apply.ApplyStatusUpdate;
 import com.example.kafkaservice.audit.EventProcessingLogRecord;
+import com.example.kafkaservice.intake.RawMessageParser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -20,8 +21,9 @@ import java.util.List;
 public class EventProcessingLogRepository {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final RawMessageParser rawMessageParser;
 
-    public void insertStagedIfAbsent(EventProcessingLogRecord record) {
+    public void insertIfAbsent(EventProcessingLogRecord record) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("stagingId", record.stagingId())
                 .addValue("loadingId", record.loadingId())
@@ -100,7 +102,7 @@ public class EventProcessingLogRepository {
                 select marked.staging_id,
                        marked.loading_id,
                        marked.entity_type,
-                       si.raw_message
+                       si.body_json::text as body_json
                 from marked
                 join staging_inbox si on si.id = marked.staging_id
                 order by marked.staging_id
@@ -110,7 +112,7 @@ public class EventProcessingLogRepository {
                         rs.getLong("staging_id"),
                         rs.getString("loading_id"),
                         rs.getString("entity_type"),
-                        rs.getString("raw_message")
+                        rawMessageParser.parseJson(rs.getString("body_json"))
                 )
         );
     }

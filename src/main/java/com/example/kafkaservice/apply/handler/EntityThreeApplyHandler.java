@@ -36,8 +36,7 @@ public class EntityThreeApplyHandler implements ApplyEntityHandler {
         List<EntityThreeItem> items = new ArrayList<>();
         for (ApplyCandidate candidate : candidates) {
             EntityThreeData data = entityMapper.toEntityThree(candidate.body());
-            if (data.summaryUuid() == null || data.summaryUuid().isBlank()
-                    || data.trendUuid() == null || data.trendUuid().isBlank()) {
+            if (data.summaryUuid() == null || data.summaryUuid().isBlank()) {
                 statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(),
                         "ENTITY_3 message does not contain summary_uuid and trend_uuid"));
                 continue;

@@ -39,13 +39,12 @@ public class EntityTwoRepository {
                     client_segment_code,
                     product_id,
                     prev_product_id
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, coalesce(?, CURRENT_TIMESTAMP), ?, ?, ?, ?, ?, ?)
                 on conflict (cm_id, trend_uuid, summary_uuid, answer_date) do update set
-                    created_at = excluded.created_at,
-                    event_type_id = excluded.event_type_id,
-                    client_segment_code = excluded.client_segment_code,
-                    product_id = excluded.product_id,
-                    prev_product_id = excluded.prev_product_id
+                    event_type_id = coalesce(excluded.event_type_id,  final_entity_1.event_type_id),
+                    client_segment_code = coalesce(excluded.client_segment_code,  final_entity_1.client_segment_code),
+                    product_id = coalesce(excluded.product_id,   final_entity_1.product_id),
+                    prev_product_id = coalesce(excluded.prev_product_id , final_entity_1.prev_product_id)
                 """,
                 new BatchPreparedStatementSetter() {
                     @Override
@@ -81,7 +80,6 @@ public class EntityTwoRepository {
                        trend_uuid,
                        summary_uuid,
                        answer_date,
-                       created_at,
                        event_type_id,
                        client_segment_code,
                        product_id,
@@ -124,7 +122,6 @@ public class EntityTwoRepository {
                         );
 
                         result.put(key, new EntityTwoComparable(
-                                rs.getDate("created_at") == null ? null : rs.getDate("created_at").toLocalDate(),
                                 (Integer) rs.getObject("event_type_id"),
                                 rs.getString("client_segment_code"),
                                 (Integer) rs.getObject("product_id"),
@@ -137,18 +134,20 @@ public class EntityTwoRepository {
     }
 
     public record EntityTwoComparable(
-            java.time.LocalDate createdAt,
             Integer eventTypeId,
             String clientSegmentCode,
             Integer productId,
             Integer prevProductId
     ) {
         public boolean isChangedComparedTo(EntityTwoData data) {
-            return !java.util.Objects.equals(createdAt, data.createdAt())
-                    || !java.util.Objects.equals(eventTypeId, data.eventTypeId())
-                    || !java.util.Objects.equals(clientSegmentCode, data.clientSegmentCode())
-                    || !java.util.Objects.equals(productId, data.productId())
-                    || !java.util.Objects.equals(prevProductId, data.prevProductId());
+            return isChanged(eventTypeId, data.eventTypeId())
+                    || isChanged(clientSegmentCode, data.clientSegmentCode())
+                    || isChanged(productId, data.productId())
+                    || isChanged(prevProductId, data.prevProductId());
+        }
+
+        private static <T> boolean isChanged(T patchValue, T existingValue) {
+            return patchValue != null && !java.util.Objects.equals(patchValue, existingValue);
         }
     }
 }

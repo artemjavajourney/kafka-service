@@ -40,17 +40,16 @@ public class EntityOneRepository {
                     employee_id_create,
                     created_at,
                     prev_product_id
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, ?, coalesce(?, false), ?, ?, coalesce(?, false), ?, coalesce(?, CURRENT_TIMESTAMP), ?)
                 on conflict (trend_uuid) do update set
-                    trend_name = excluded.trend_name,
-                    emotion = excluded.emotion,
-                    is_visible = excluded.is_visible,
-                    product_id = excluded.product_id,
-                    group_id = excluded.group_id,
-                    is_archived = excluded.is_archived,
-                    employee_id_create = excluded.employee_id_create,
-                    created_at = excluded.created_at,
-                    prev_product_id = excluded.prev_product_id
+                    trend_name = coalesce(excluded.trend_name, final_entity_1.trend_name),
+                    emotion = coalesce(excluded.emotion, final_entity_1.emotion),
+                    is_visible = coalesce(excluded.is_visible, final_entity_1.is_archived)
+                    product_id = coalesce(excluded.product_id, final_entity_1.product_id),
+                    group_id = coalesce(excluded.group_id, final_entity_1.group_id),
+                    is_archived = coalesce(excluded.is_archived, final_entity_1.is_archived),
+                    employee_id_create = coalesce(excluded.employee_id_create, final_entity_1.employee_id_create),
+                    prev_product_id = coalesce(excluded.prev_product_id, final_entity_1.prev_product_id)
                 """,
                 new BatchPreparedStatementSetter() {
                     @Override
@@ -76,22 +75,6 @@ public class EntityOneRepository {
         );
     }
 
-    public Set<String> findExistingTrendUuids(Set<String> trendUuids) {
-        if (trendUuids.isEmpty()) {
-            return Collections.emptySet();
-        }
-
-        return Set.copyOf(jdbcTemplate.queryForList(
-                """
-                select trend_uuid
-                from final_entity_1
-                where trend_uuid in (:ids)
-                """,
-                new MapSqlParameterSource("ids", trendUuids),
-                String.class
-        ));
-    }
-
     public Map<String, EntityOneComparable> findComparableByTrendUuids(Set<String> trendUuids) {
         if (trendUuids.isEmpty()) {
             return Collections.emptyMap();
@@ -102,7 +85,12 @@ public class EntityOneRepository {
                 select trend_uuid,
                        trend_name,
                        emotion,
-                       product_id
+                       is_visible,
+                       product_id,
+                       group_id,
+                       is_archived,
+                       employee_id_create,
+                       prev_product_id
                 from final_entity_1
                 where trend_uuid in (:ids)
                 """,
@@ -115,7 +103,12 @@ public class EntityOneRepository {
                                 new EntityOneComparable(
                                         rs.getString("trend_name"),
                                         (Integer) rs.getObject("emotion"),
-                                        (Integer) rs.getObject("product_id")
+                                        (Boolean) rs.getObject("is_visible"),
+                                        (Integer) rs.getObject("product_id"),
+                                        rs.getString("group_id"),
+                                        (Boolean) rs.getObject("is_archived"),
+                                        rs.getString("employee_id_create"),
+                                        (Integer) rs.getObject("prev_product_id")
                                 )
                         );
                     }
@@ -127,12 +120,26 @@ public class EntityOneRepository {
     public record EntityOneComparable(
             String trendName,
             Integer emotion,
-            Integer productId
+            Boolean isVisible,
+            Integer productId,
+            String groupId,
+            Boolean isArchived,
+            String employeeIdCreate,
+            Integer prevProductId
     ) {
-        public boolean isChangedComparedTo(EntityOneData data) {
-            return !java.util.Objects.equals(trendName, data.trendName())
-                    || !java.util.Objects.equals(emotion, data.emotion())
-                    || !java.util.Objects.equals(productId, data.productId());
+        public boolean isChangedComparedTo(EntityOneData patch) {
+            return isChanged(patch.trendName(), trendName)
+                    || isChanged(patch.emotion(), emotion)
+                    || isChanged(patch.isVisible(), isVisible)
+                    || isChanged(patch.productId(), productId)
+                    || isChanged(patch.groupId(), groupId)
+                    || isChanged(patch.isArchived(), isArchived)
+                    || isChanged(patch.employeeIdCreate(), employeeIdCreate)
+                    || isChanged(patch.prevProductId(), prevProductId);
+        }
+
+        private static <T> boolean isChanged(T patchValue, T existingValue) {
+            return patchValue != null && !java.util.Objects.equals(patchValue, existingValue);
         }
     }
 }

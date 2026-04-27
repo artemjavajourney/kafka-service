@@ -7,13 +7,8 @@ public record StagingInboxRecord(
         int kafkaPartition,
         long kafkaOffset,
         String kafkaKey,
-        String loadingId,
-        String entityType,
         String rawMessage,
-        ParseStatus parseStatus,
-        IntakeStatus intakeStatus,
-        String errorMessage,
-        OffsetDateTime receivedAt,
-        OffsetDateTime stagedAt
+        String bodyJson,
+        OffsetDateTime receivedAt
 ) {
 }

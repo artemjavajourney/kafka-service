@@ -17,7 +17,7 @@ import java.time.ZoneOffset;
 @RequiredArgsConstructor
 public class KafkaIntakeService {
 
-    private final MessageMetadataExtractor messageMetadataExtractor;
+    private final RawMessageParser rawMessageParser;
     private final StagingInboxRepository stagingInboxRepository;
     private final EventProcessingLogRepository eventProcessingLogRepository;
 
@@ -25,33 +25,26 @@ public class KafkaIntakeService {
     public IntakeResult intake(ConsumerRecord<String, String> record) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
 
-        ExtractedMetadata metadata = messageMetadataExtractor.extract(record.value());
+        ParsedMessage parsedMessage = rawMessageParser.parse(record.value());
+        String bodyJson = parsedMessage.body() == null ? null : rawMessageParser.toJson(parsedMessage.body());
 
         StagingInboxRecord stagingRecord = new StagingInboxRecord(
                 record.topic(),
                 record.partition(),
                 record.offset(),
                 record.key(),
-                metadata.loadingId(),
-                metadata.entityType(),
                 record.value(),
-                metadata.parseStatus(),
-                IntakeStatus.STAGED,
-                metadata.errorMessage(),
-                now,
+                bodyJson,
                 now
         );
 
         long stagingId = stagingInboxRepository.insertIfAbsent(stagingRecord);
 
-        eventProcessingLogRepository.insertStagedIfAbsent(
-                EventProcessingLogRecord.staged(
-                        stagingId,
-                        metadata.loadingId(),
-                        metadata.entityType(),
-                        now
-                )
-        );
+        EventProcessingLogRecord processingLogRecord = parsedMessage.isBodyUsable()
+                ? EventProcessingLogRecord.staged(stagingId, parsedMessage.loadingId(), parsedMessage.entityType(), now)
+                : EventProcessingLogRecord.failed(stagingId, parsedMessage.loadingId(), parsedMessage.errorMessage(), now);
+
+        eventProcessingLogRepository.insertIfAbsent(processingLogRecord);
 
         log.info(
                 "Kafka message staged: topic={}, partition={}, offset={}, key={}, loadingId={}, entityType={}, parseStatus={}",
@@ -59,16 +52,16 @@ public class KafkaIntakeService {
                 record.partition(),
                 record.offset(),
                 record.key(),
-                metadata.loadingId(),
-                metadata.entityType(),
-                metadata.parseStatus()
+                parsedMessage.loadingId(),
+                parsedMessage.entityType(),
+                parsedMessage.parseStatus()
         );
 
         return new IntakeResult(
                 stagingId,
-                metadata.loadingId(),
-                metadata.entityType(),
-                metadata.parseStatus()
+                parsedMessage.loadingId(),
+                parsedMessage.entityType(),
+                parsedMessage.parseStatus()
         );
     }
 }

@@ -5,7 +5,6 @@ import com.example.kafkaservice.apply.ApplyStatusUpdate;
 import com.example.kafkaservice.apply.BusinessEntityMapper;
 import com.example.kafkaservice.apply.model.EntityOneData;
 import com.example.kafkaservice.apply.support.ApplyDedupeUtil;
-import com.example.kafkaservice.apply.support.ResolvedApplyCandidate;
 import com.example.kafkaservice.finaltable.repository.EntityOneRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
@@ -29,15 +28,14 @@ public class EntityOneApplyHandler implements ApplyEntityHandler {
     }
 
     @Override
-    public void handle(List<ResolvedApplyCandidate> candidates, List<ApplyStatusUpdate> statusUpdates) {
+    public void handle(List<ApplyCandidate> candidates, List<ApplyStatusUpdate> statusUpdates) {
         if (candidates.isEmpty()) {
             return;
         }
 
         List<EntityOneItem> items = new ArrayList<>();
-        for (ResolvedApplyCandidate resolved : candidates) {
-            ApplyCandidate candidate = resolved.candidate();
-            EntityOneData data = entityMapper.toEntityOne(resolved.payload().body());
+        for (ApplyCandidate candidate : candidates) {
+            EntityOneData data = entityMapper.toEntityOne(candidate.body());
             if (data.trendUuid() == null || data.trendUuid().isBlank()) {
                 statusUpdates.add(ApplyStatusUpdate.failed(candidate.stagingId(), "ENTITY_1 message does not contain trend_uuid"));
                 continue;

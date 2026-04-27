@@ -37,14 +37,13 @@ public class EntityThreeRepository {
                     is_etalon,
                     employee_id_create,
                     created_at
-                ) values (?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, ?, ?, coalesce(?, false) ?, coalesce(?, CURRENT_TIMESTAMP))
                 on conflict (summary_uuid) do update set
-                    summary_name = excluded.summary_name,
-                    trend_uuid = excluded.trend_uuid,
-                    sentiment = excluded.sentiment,
-                    is_etalon = excluded.is_etalon,
-                    employee_id_create = excluded.employee_id_create,
-                    created_at = excluded.created_at
+                    summary_name = coalesce(excluded.summary_name, final_entity_1.summary_name),
+                    trend_uuid = coalesce(excluded.trend_uuid,  final_entity_1.trend_uuid),
+                    sentiment = coalesce(excluded.sentiment,  final_entity_1.sentiment),
+                    is_etalon = coalesce(excluded.is_etalon,  final_entity_1.is_etalon)
+                    employee_id_create = coalesce(excluded.employee_id_create,   final_entity_1.employee_id_create),
                 """,
                 new BatchPreparedStatementSetter() {
                     @Override
@@ -78,7 +77,8 @@ public class EntityThreeRepository {
                        summary_name,
                        trend_uuid,
                        sentiment,
-                       is_etalon
+                       is_etalon,
+                       employee_id_create,
                 from final_entity_3
                 where summary_uuid in (:ids)
                 """,
@@ -92,7 +92,8 @@ public class EntityThreeRepository {
                                         rs.getString("summary_name"),
                                         rs.getString("trend_uuid"),
                                         (Integer) rs.getObject("sentiment"),
-                                        (Boolean) rs.getObject("is_etalon")
+                                        (Boolean) rs.getObject("is_etalon"),
+                                        rs.getString("employee_id_create")
                                 )
                         );
                     }
@@ -105,13 +106,19 @@ public class EntityThreeRepository {
             String summaryName,
             String trendUuid,
             Integer sentiment,
-            Boolean isEtalon
+            Boolean isEtalon,
+            String employeeIdCreate
     ) {
         public boolean isChangedComparedTo(EntityThreeData data) {
-            return !java.util.Objects.equals(summaryName, data.summaryName())
-                    || !java.util.Objects.equals(trendUuid, data.trendUuid())
-                    || !java.util.Objects.equals(sentiment, data.sentiment())
-                    || !java.util.Objects.equals(isEtalon, data.isEtalon());
+            return isChanged(summaryName, data.summaryName())
+                    || isChanged(trendUuid, data.trendUuid())
+                    || isChanged(sentiment, data.sentiment())
+                    || isChanged(isEtalon, data.isEtalon())
+                    || isChanged(employeeIdCreate, data.employeeIdCreate());
+        }
+
+        private static <T> boolean isChanged(T patchValue, T existingValue) {
+            return patchValue != null && !java.util.Objects.equals(patchValue, existingValue);
         }
     }
 }
